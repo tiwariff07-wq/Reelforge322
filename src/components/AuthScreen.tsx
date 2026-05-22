@@ -93,7 +93,12 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
       }
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || "Failed authentication with Google account provider.");
+      const projId = auth.app.options.projectId || "smurfy-framing-s8gvj";
+      if (err.code === "auth/operation-not-allowed") {
+        setErrorMsg(`Google Sign-In provider has not been enabled in your Firebase Console. Action Needed: 1. Go to Firebase Console > Project: ${projId}. 2. Under 'Build' or 'Shortcut', click 'Authentication'. 3. Go to the 'Sign-in method' tab. 4. Click 'Add new provider', choose 'Google', fill in the settings (e.g. support email) & click 'Save'.`);
+      } else {
+        setErrorMsg(err.message || "Failed authentication with Google account provider.");
+      }
     } finally {
       setLoading(false);
     }
@@ -132,12 +137,15 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
       }
     } catch (err: any) {
       console.error(err);
+      const projId = auth.app.options.projectId || "smurfy-framing-s8gvj";
       if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
         setErrorMsg("Invalid Email or Credentials. Please verify details.");
       } else if (err.code === "auth/email-already-in-use") {
         setErrorMsg("This email identifier already possesses active profile registrations.");
       } else if (err.code === "auth/weak-password") {
         setErrorMsg("Security threshold unmet: Password must possess at least 6 characters.");
+      } else if (err.code === "auth/operation-not-allowed") {
+        setErrorMsg(`Email/Password Auth has not been enabled in your Firebase Console. Action Needed: 1. Go to Firebase Console > Project: ${projId}. 2. Go to 'Authentication' > 'Sign-in method' tab. 3. Click 'Add new provider' (or edit), select 'Email/Password', tick 'Enable' & click 'Save'.`);
       } else {
         setErrorMsg(err.message || "Credential authentication pipeline halted.");
       }
