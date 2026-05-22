@@ -9,7 +9,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { Sparkles, Mail, Lock, User, LogIn, ChevronRight, AlertCircle, RefreshCw } from "lucide-react";
+import { Sparkles, Mail, Lock, User, LogIn, ChevronRight, AlertCircle, RefreshCw, Copy, Check, ExternalLink } from "lucide-react";
 
 interface AuthScreenProps {
   onSuccess: () => void;
@@ -23,6 +23,11 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
   
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [unauthorizedDomainInfo, setUnauthorizedDomainInfo] = useState<{
+    domain: string;
+    projId: string;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleSyncUserProfile = async (firebaseUser: any, displayNameInput?: string, providerId?: string) => {
     try {
@@ -80,6 +85,7 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
   const handleOAuthGoogle = async () => {
     setLoading(true);
     setErrorMsg(null);
+    setUnauthorizedDomainInfo(null);
     try {
       const provider = new GoogleAuthProvider();
       // Google parameters
@@ -96,6 +102,11 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
       const projId = auth.app.options.projectId || "smurfy-framing-s8gvj";
       if (err.code === "auth/operation-not-allowed") {
         setErrorMsg(`Google Sign-In provider has not been enabled in your Firebase Console. Action Needed: 1. Go to Firebase Console > Project: ${projId}. 2. Under 'Build' or 'Shortcut', click 'Authentication'. 3. Go to the 'Sign-in method' tab. 4. Click 'Add new provider', choose 'Google', fill in the settings (e.g. support email) & click 'Save'.`);
+      } else if (err.code === "auth/unauthorized-domain") {
+        setUnauthorizedDomainInfo({
+          domain: window.location.hostname || "your-current-domain",
+          projId
+        });
       } else {
         setErrorMsg(err.message || "Failed authentication with Google account provider.");
       }
@@ -117,6 +128,7 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
 
     setLoading(true);
     setErrorMsg(null);
+    setUnauthorizedDomainInfo(null);
 
     try {
       if (isSignUp) {
@@ -146,6 +158,11 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
         setErrorMsg("Security threshold unmet: Password must possess at least 6 characters.");
       } else if (err.code === "auth/operation-not-allowed") {
         setErrorMsg(`Email/Password Auth has not been enabled in your Firebase Console. Action Needed: 1. Go to Firebase Console > Project: ${projId}. 2. Go to 'Authentication' > 'Sign-in method' tab. 3. Click 'Add new provider' (or edit), select 'Email/Password', tick 'Enable' & click 'Save'.`);
+      } else if (err.code === "auth/unauthorized-domain") {
+        setUnauthorizedDomainInfo({
+          domain: window.location.hostname || "your-current-domain",
+          projId
+        });
       } else {
         setErrorMsg(err.message || "Credential authentication pipeline halted.");
       }
@@ -237,7 +254,62 @@ export default function AuthScreen({ onSuccess }: AuthScreenProps) {
             </div>
           </div>
 
-          {errorMsg && (
+          {unauthorizedDomainInfo && (
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="p-4 bg-amber-950/35 border border-amber-500/20 text-amber-200 rounded-2xl text-xs space-y-3.5 shadow-xl text-left"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-bold text-amber-400 text-[13px] leading-tight">Secure Domain Not Authorized</h4>
+                  <p className="text-[11px] text-amber-200/80 leading-relaxed mt-1">
+                    Firebase blocks authentication requests from unlisted web addresses to prevent unauthorized access.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/80 border border-slate-900 rounded-xl p-2.5 flex items-center justify-between gap-3">
+                <div className="font-mono text-[10px] text-slate-300 truncate select-all">
+                  {unauthorizedDomainInfo.domain}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(unauthorizedDomainInfo.domain);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="px-2.5 py-1 bg-slate-900 hover:bg-slate-850 hover:text-white border border-slate-800 rounded-lg text-[10px] font-sans font-bold flex items-center gap-1 shrink-0 transition-all cursor-pointer text-slate-300"
+                >
+                  {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-400" />}
+                  <span>{copied ? "Copied" : "Copy"}</span>
+                </button>
+              </div>
+
+              <div className="space-y-1.5 pl-2 border-l border-amber-500/30 text-[11px] text-amber-200/90 leading-relaxed">
+                <p className="font-bold text-amber-300">Action Needed to Resolve:</p>
+                <ol className="list-decimal list-inside space-y-1.5">
+                  <li className="pl-1">
+                    Go to the{" "}
+                    <a 
+                      href={`https://console.firebase.google.com/project/${unauthorizedDomainInfo.projId}/authentication/settings`} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-blue-400 hover:text-blue-300 underline font-bold inline-flex items-center gap-0.5"
+                    >
+                      Firebase Console settings <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </li>
+                  <li className="pl-1">Locate the <strong className="text-amber-300">Authorized domains</strong> panel.</li>
+                  <li className="pl-1">Click <strong className="text-amber-300">Add domain</strong> and paste the copied address above.</li>
+                </ol>
+              </div>
+            </motion.div>
+          )}
+
+          {errorMsg && !unauthorizedDomainInfo && (
             <motion.div 
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}

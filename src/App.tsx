@@ -62,9 +62,18 @@ import FeedbackModal from "./components/FeedbackModal";
 
 export default function App() {
   // Authentication & Profile tracking states
-  const [user, setUser] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [user, setUser] = useState<any>({
+    uid: "guest_creator_uid",
+    email: "creator@reelforge.ai",
+    displayName: "AI Creator",
+  });
+  const [authLoading, setAuthLoading] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>({
+    name: "VIP Creator",
+    email: "creator@reelforge.ai",
+    isPremium: true,
+    totalGenerations: 9999,
+  });
 
   // View state switches
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -114,47 +123,13 @@ export default function App() {
     { text: "Ancient Roman general betrayed by his army", tone: "Historical", niche: "Historical Chronology" }
   ];
 
-  // 1. Core Authentication Change Listener standard
+  // Check custom local storage onboarding indicator
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-      setAuthLoading(false);
-      if (!firebaseUser) {
-        setUserProfile(null);
-        setShowOnboarding(false);
-      }
-    });
-    return () => unsubAuth();
-  }, []);
-
-  // 2. Realtime User Profile Firestore Synchronization standard
-  useEffect(() => {
-    if (!user) return;
-
-    // Check custom local storage onboarding indicator
     const onboarded = localStorage.getItem("reelforge_onboarded_v1");
     if (!onboarded) {
       setShowOnboarding(true);
     }
-
-    const unsubProfile = onSnapshot(
-      doc(db, "users", user.uid),
-      (docSnap) => {
-        if (docSnap.exists()) {
-          setUserProfile(docSnap.data());
-        }
-        setAuthLoading(false);
-      },
-      (err) => {
-        console.error("User profile document streaming issue:", err);
-        setAuthLoading(false);
-      }
-    );
-
-    return () => {
-      unsubProfile();
-    };
-  }, [user]);
+  }, []);
 
   // Set default interactive template to make user experience pristine immediately
   useEffect(() => {
@@ -779,15 +754,7 @@ export default function App() {
             </button>
           )}
 
-          {/* SignOut trigger */}
-          <button
-            onClick={handleSignOut}
-            className="p-2 md:px-3 md:py-2 text-[11px] font-sans text-slate-400 hover:text-amber-500 bg-slate-900/60 hover:bg-slate-900 border border-slate-850 hover:border-slate-800 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Terminate Session"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Sign Out</span>
-          </button>
+
 
         </div>
       </header>
