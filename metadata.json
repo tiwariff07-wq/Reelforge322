@@ -1,0 +1,6 @@
+{
+  "name": "ReelForge AI",
+  "description": "A premium mobile-first creator operating system designed specifically for faceless short-form content creators on YouTube Shorts, Instagram Reels, TikTok, and Facebook Reels.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
