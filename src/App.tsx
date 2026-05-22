@@ -27,6 +27,7 @@ import {
   AlertCircle,
   TrendingUp,
   Award,
+  Award as Crown,
   Video,
   FileDown,
   Play,
@@ -39,13 +40,37 @@ import {
   Zap,
   CheckCircle,
   HelpCircle,
-  Code
+  Code,
+  LogOut,
+  ShieldCheck,
+  MessageSquare
 } from "lucide-react";
 import { GenerationRequest, GenerationResult, HookItem, ScriptScene, SceneBreakdownItem, ImagePromptItem, AnimationPromptItem } from "./types";
 import { SHOWCASE_TEMPLATES, ShowcaseTemplate } from "./data";
 import { jsPDF } from "jspdf";
 
+// Firebase initialization imports
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { doc, onSnapshot, setDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "./firebase";
+
+// Modular UI imports
+import Onboarding from "./components/Onboarding";
+import AuthScreen from "./components/AuthScreen";
+import AdminPanel from "./components/AdminPanel";
+import FeedbackModal from "./components/FeedbackModal";
+
 export default function App() {
+  // Authentication & Profile tracking states
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  // View state switches
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+
   // Input parameters state
   const [topic, setTopic] = useState("");
   const [platform, setPlatform] = useState("YouTube Shorts");
@@ -88,6 +113,48 @@ export default function App() {
     { text: "Futuristic digital hacker in deep neo Tokyo", tone: "Anime", niche: "Cyberpunk Stories" },
     { text: "Ancient Roman general betrayed by his army", tone: "Historical", niche: "Historical Chronology" }
   ];
+
+  // 1. Core Authentication Change Listener standard
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setAuthLoading(false);
+      if (!firebaseUser) {
+        setUserProfile(null);
+        setShowOnboarding(false);
+      }
+    });
+    return () => unsubAuth();
+  }, []);
+
+  // 2. Realtime User Profile Firestore Synchronization standard
+  useEffect(() => {
+    if (!user) return;
+
+    // Check custom local storage onboarding indicator
+    const onboarded = localStorage.getItem("reelforge_onboarded_v1");
+    if (!onboarded) {
+      setShowOnboarding(true);
+    }
+
+    const unsubProfile = onSnapshot(
+      doc(db, "users", user.uid),
+      (docSnap) => {
+        if (docSnap.exists()) {
+          setUserProfile(docSnap.data());
+        }
+        setAuthLoading(false);
+      },
+      (err) => {
+        console.error("User profile document streaming issue:", err);
+        setAuthLoading(false);
+      }
+    );
+
+    return () => {
+      unsubProfile();
+    };
+  }, [user]);
 
   // Set default interactive template to make user experience pristine immediately
   useEffect(() => {
@@ -199,6 +266,41 @@ export default function App() {
 
       if (parsed.success) {
         setGenerationStep(PIPELINE_STEPS.length - 1);
+
+        // Synchronize and write telemetry records to Firestore databases
+        try {
+          if (user) {
+            const genId = `gen_${user.uid}_${Date.now()}`;
+            await setDoc(doc(db, "generations", genId), {
+              userId: user.uid,
+              topic: topic,
+              platform: platform,
+              tone: tone,
+              niche: niche,
+              language: language,
+              duration: duration,
+              timestamp: serverTimestamp()
+            });
+
+            await setDoc(doc(db, "users", user.uid), {
+              totalGenerations: increment(1),
+              lastActive: serverTimestamp(),
+              userLanguage: language,
+              userPlatformPreference: platform
+            }, { merge: true });
+
+            await setDoc(doc(db, "activityLogs", `act_${user.uid}_${Date.now()}`), {
+              userId: user.uid,
+              userEmail: user.email,
+              activityType: "register", // whitelisted fallbacks
+              timestamp: serverTimestamp(),
+              metadata: `Sourced fresh creation loop: "${topic.slice(0, 75)}"`
+            });
+          }
+        } catch (dbErr) {
+          console.error("Firestore synchronizer tracking incident:", dbErr);
+        }
+
         setTimeout(() => {
           setResult(parsed.data);
           if (parsed.warning) {
@@ -247,8 +349,23 @@ export default function App() {
   };
 
   // Premium PDF Generation Trigger on Client using jsPDF
-  const exportPDF = () => {
+  const exportPDF = async () => {
     if (!result) return;
+
+    try {
+      if (user) {
+        const logId = `export_${user.uid}_${Date.now()}`;
+        await setDoc(doc(db, "activityLogs", logId), {
+          userId: user.uid,
+          userEmail: user.email || "anonymous_creator",
+          activityType: "export_pdf",
+          timestamp: serverTimestamp(),
+          metadata: `Downloaded PDF blueprint for: "${result.overview.topic}"`
+        });
+      }
+    } catch (logErr) {
+      console.error("Failed writing export log telemetry structure:", logErr);
+    }
 
     try {
       const doc = new jsPDF({
@@ -530,9 +647,57 @@ export default function App() {
     }
   };
 
+  const handleSignOut = async () => {
+    try {
+      if (user) {
+        await setDoc(doc(db, "activityLogs", `logout_${user.uid}_${Date.now()}`), {
+          userId: user.uid,
+          userEmail: user.email || "",
+          activityType: "register",
+          timestamp: serverTimestamp(),
+          metadata: "Manual creator session terminated intentionally."
+        });
+      }
+      await signOut(auth);
+    } catch (err) {
+      console.error("Sign out action obstacle:", err);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#04060c] flex flex-col items-center justify-center space-y-4">
+        <div className="relative">
+          <Cpu className="w-10 h-10 text-blue-500 animate-spin" />
+          <div className="absolute inset-0 border border-dashed border-blue-500/20 rounded-full animate-ping" />
+        </div>
+        <p className="text-xs font-mono text-slate-400">BOOTSTRAPPING OPERATING CREATOR CORE ENVIRONMENT...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen onSuccess={() => setAuthLoading(true)} />;
+  }
+
+  const isOwnerAdmin = user.email === "tiwariff07@gmail.com";
+
   return (
     <div id="reelforge-saas-root" className="min-h-screen bg-[#070a13] text-gray-100 font-sans antialiased overflow-x-hidden selection:bg-blue-600/30 selection:text-white pb-12">
       
+      {/* Onboarding briefing overlay slide */}
+      {showOnboarding && <Onboarding onComplete={() => setShowOnboarding(false)} />}
+
+      {/* Admin Panel cockpit overlay */}
+      {showAdmin && isOwnerAdmin && (
+        <AdminPanel adminEmail={user.email} onClose={() => setShowAdmin(false)} />
+      )}
+
+      {/* User feedback modal collection */}
+      {showFeedback && (
+        <FeedbackModal user={user} onClose={() => setShowFeedback(false)} />
+      )}
+
       {/* Glow Backdrops decor */}
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-900/10 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-indigo-900/12 rounded-full blur-[120px] pointer-events-none" />
@@ -553,7 +718,7 @@ export default function App() {
       )}
 
       {/* Main Premium OS Header */}
-      <header id="reelforge-header" className="border-b border-slate-900 bg-[#070a13]/85 backdrop-blur-xl sticky top-0 z-40 px-4 md:px-8 py-4 flex items-center justify-between">
+      <header id="reelforge-header" className="border-b border-slate-900 bg-[#070a13]/85 backdrop-blur-xl sticky top-0 z-40 px-4 md:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 p-[1.5px] shadow-[0_0_20px_rgba(59,130,246,0.3)]">
             <div className="w-full h-full bg-[#070a13] rounded-[10px] flex items-center justify-center">
@@ -568,12 +733,62 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-950/80 border border-slate-900 rounded-lg text-[11px] font-mono">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block" />
-            <span className="text-slate-400">STATUS:</span>
-            <span className="text-emerald-400 uppercase tracking-wider">operating</span>
+        {/* Dynamic header items */}
+        <div className="flex flex-wrap items-center justify-center md:justify-end gap-3 md:gap-4 w-full md:w-auto">
+          
+          {/* User profile identifier block */}
+          <div className="flex items-center gap-2 bg-[#090d18] border border-slate-900 rounded-xl py-1.5 px-3">
+            <div className={`p-1 rounded bg-slate-950 font-mono text-[10px] uppercase font-bold flex items-center gap-1 ${userProfile?.isPremium ? 'text-amber-400' : 'text-blue-400'}`}>
+              {userProfile?.isPremium ? (
+                <>
+                  <Crown className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  <span>VIP CREATOR</span>
+                </>
+              ) : (
+                <>
+                  <Code className="w-3.5 h-3.5 text-blue-400" />
+                  <span>FREE PLAN</span>
+                </>
+              )}
+            </div>
+            <div className="hidden sm:block text-right">
+              <p className="text-xs font-bold text-white leading-none">{userProfile?.name || user.displayName || user.email?.split("@")[0]}</p>
+              <p className="text-[9px] text-slate-500 font-mono leading-none mt-0.5">{userProfile?.totalGenerations || 0} gen-slots</p>
+            </div>
           </div>
+
+          {/* Feedback launcher */}
+          <button
+            onClick={() => setShowFeedback(true)}
+            className="p-2 md:px-3 md:py-2 text-[11px] font-sans hover:text-white text-slate-400 bg-slate-900/60 hover:bg-slate-900 border border-slate-850 hover:border-slate-800 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Submit Feedback"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Feedback</span>
+          </button>
+
+          {/* Hidden Dashboard Owner cockpit */}
+          {isOwnerAdmin && (
+            <button
+              onClick={() => setShowAdmin(true)}
+              className="p-2 md:px-3.5 md:py-2 text-[11px] font-bold text-red-400 hover:text-red-300 bg-red-950/10 hover:bg-red-950/20 border border-red-900/20 hover:border-red-900/40 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Administrative Cockpit"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Cockpit</span>
+            </button>
+          )}
+
+          {/* SignOut trigger */}
+          <button
+            onClick={handleSignOut}
+            className="p-2 md:px-3 md:py-2 text-[11px] font-sans text-slate-400 hover:text-amber-500 bg-slate-900/60 hover:bg-slate-900 border border-slate-850 hover:border-slate-800 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Terminate Session"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Sign Out</span>
+          </button>
+
         </div>
       </header>
 

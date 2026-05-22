@@ -1,0 +1,180 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account schema stored in Firestore.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique Firebase Authentication UID."
+        },
+        "name": {
+          "type": "string",
+          "description": "User display name."
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address."
+        },
+        "loginProvider": {
+          "type": "string",
+          "description": "Authentication provider (e.g. password, google.com)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Account registration timestamp."
+        },
+        "lastActive": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last active trigger."
+        },
+        "totalGenerations": {
+          "type": "integer",
+          "description": "Total count of successful generator calls."
+        },
+        "userLanguage": {
+          "type": "string",
+          "description": "Language preference of the creator."
+        },
+        "userPlatformPreference": {
+          "type": "string",
+          "description": "Primary platform target of the creator."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "admin"],
+          "description": "User access role ("admin" or "user")."
+        },
+        "isPremium": {
+          "type": "boolean",
+          "description": "Boolean checking if user has premium credentials."
+        }
+      },
+      "required": ["uid", "name", "email", "loginProvider", "createdAt", "lastActive", "totalGenerations", "userLanguage", "userPlatformPreference", "role", "isPremium"]
+    },
+    "Generation": {
+      "title": "Generation",
+      "description": "Tracking document for generated short scripts for analytics.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The user UID that generated this."
+        },
+        "topic": {
+          "type": "string",
+          "description": "Input topic."
+        },
+        "platform": {
+          "type": "string",
+          "description": "Platform selected."
+        },
+        "tone": {
+          "type": "string",
+          "description": "Tone selected."
+        },
+        "niche": {
+          "type": "string",
+          "description": "Niche selected."
+        },
+        "language": {
+          "type": "string",
+          "description": "Language selected."
+        },
+        "duration": {
+          "type": "string",
+          "description": "Duration of video."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Time of generation."
+        }
+      },
+      "required": ["userId", "topic", "platform", "tone", "niche", "language", "duration", "timestamp"]
+    },
+    "Feedback": {
+      "title": "Feedback",
+      "description": "Feedback message submitted by the user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the user."
+        },
+        "userName": {
+          "type": "string",
+          "description": "Name of the user."
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "Email of the user."
+        },
+        "feedbackText": {
+          "type": "string",
+          "description": "User submit message."
+        },
+        "rating": {
+          "type": "integer",
+          "description": "Quality rating (1-5)."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Feedback timestamp."
+        }
+      },
+      "required": ["userId", "userName", "userEmail", "feedbackText", "rating", "timestamp"]
+    },
+    "ActivityLog": {
+      "title": "Activity Log",
+      "description": "User activity logging entries.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The user UID."
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "The user email."
+        },
+        "activityType": {
+          "type": "string",
+          "description": "Action type (e.g. login, logout, register, export_pdf)."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Log timestamp."
+        },
+        "metadata": {
+          "type": "string",
+          "description": "Additional string payload detail."
+        }
+      },
+      "required": ["userId", "userEmail", "activityType", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User database profiles."
+    },
+    "/generations/{generationId}": {
+      "schema": "Generation",
+      "description": "Public generation analytics track."
+    },
+    "/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "App owner feedback submissions."
+    },
+    "/activityLogs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "Access tracking details."
+    }
+  }
+}
